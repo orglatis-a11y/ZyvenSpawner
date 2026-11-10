@@ -1,0 +1,107 @@
+# ZyvenSpawner - inspired by DonutSMP (credit: DonutSMP)
+# NOTE: values are my best approximation, NOT the exact DonutSMP numbers. Tune freely.
+settings:
+  max-stack: 10000
+  max-storage: 1000000
+  require-silk-touch-natural: true
+  only-generate-in-loaded-chunks: true
+
+spawners:
+  SKELETON:
+    interval-seconds: 15
+    xp-per-roll: 6
+    drops:
+      BONE:  {min: 1, max: 3, chance: 100, price: 2.0}
+      ARROW: {min: 0, max: 2, chance: 100, price: 1.0}
+  ZOMBIE:
+    interval-seconds: 15
+    xp-per-roll: 5
+    drops:
+      ROTTEN_FLESH: {min: 1, max: 3, chance: 100, price: 1.0}
+      IRON_INGOT:   {min: 1, max: 1, chance: 5, price: 15.0}
+  PIG:
+    interval-seconds: 15
+    xp-per-roll: 3
+    drops:
+      PORKCHOP: {min: 1, max: 3, chance: 100, price: 3.0}
+  COW:
+    interval-seconds: 15
+    xp-per-roll: 3
+    drops:
+      BEEF:    {min: 1, max: 3, chance: 100, price: 3.0}
+      LEATHER: {min: 0, max: 2, chance: 100, price: 2.0}
+  CHICKEN:
+    interval-seconds: 15
+    xp-per-roll: 3
+    drops:
+      CHICKEN: {min: 1, max: 2, chance: 100, price: 2.0}
+      FEATHER: {min: 0, max: 2, chance: 100, price: 1.0}
+  CREEPER:
+    interval-seconds: 15
+    xp-per-roll: 5
+    drops:
+      GUNPOWDER: {min: 1, max: 2, chance: 100, price: 4.0}
+  SPIDER:
+    interval-seconds: 15
+    xp-per-roll: 5
+    drops:
+      STRING:     {min: 1, max: 2, chance: 100, price: 2.0}
+      SPIDER_EYE: {min: 0, max: 1, chance: 50, price: 3.0}
+  CAVE_SPIDER:
+    interval-seconds: 15
+    xp-per-roll: 5
+    drops:
+      STRING:     {min: 1, max: 2, chance: 100, price: 2.0}
+      SPIDER_EYE: {min: 0, max: 1, chance: 50, price: 3.0}
+  BLAZE:
+    interval-seconds: 20
+    xp-per-roll: 10
+    drops:
+      BLAZE_ROD: {min: 1, max: 2, chance: 100, price: 12.0}
+  IRON_GOLEM:
+    interval-seconds: 20
+    xp-per-roll: 0
+    drops:
+      IRON_INGOT: {min: 3, max: 5, chance: 100, price: 15.0}
+      POPPY:      {min: 0, max: 2, chance: 100, price: 1.0}
+  ZOMBIFIED_PIGLIN:
+    interval-seconds: 20
+    xp-per-roll: 5
+    drops:
+      GOLD_NUGGET:  {min: 1, max: 3, chance: 100, price: 3.0}
+      ROTTEN_FLESH: {min: 0, max: 2, chance: 100, price: 1.0}
+      GOLD_INGOT:   {min: 1, max: 1, chance: 3, price: 25.0}
+  ENDERMAN:
+    interval-seconds: 20
+    xp-per-roll: 5
+    drops:
+      ENDER_PEARL: {min: 1, max: 1, chance: 60, price: 20.0}
+  WITCH:
+    interval-seconds: 20
+    xp-per-roll: 5
+    drops:
+      REDSTONE:       {min: 1, max: 3, chance: 100, price: 2.0}
+      GLOWSTONE_DUST: {min: 0, max: 2, chance: 100, price: 3.0}
+      SUGAR:          {min: 0, max: 2, chance: 100, price: 1.0}
+  WITHER_SKELETON:
+    interval-seconds: 25
+    xp-per-roll: 5
+    drops:
+      COAL: {min: 1, max: 2, chance: 100, price: 3.0}
+      BONE: {min: 0, max: 2, chance: 100, price: 2.0}
+  MAGMA_CUBE:
+    interval-seconds: 20
+    xp-per-roll: 4
+    drops:
+      MAGMA_CREAM: {min: 1, max: 1, chance: 70, price: 6.0}
+  SLIME:
+    interval-seconds: 20
+    xp-per-roll: 4
+    drops:
+      SLIME_BALL: {min: 1, max: 2, chance: 100, price: 5.0}
+  GHAST:
+    interval-seconds: 25
+    xp-per-roll: 5
+    drops:
+      GHAST_TEAR: {min: 1, max: 1, chance: 40, price: 30.0}
+      GUNPOWDER:  {min: 1, max: 2, chance: 100, price: 4.0}
