@@ -39,7 +39,7 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
     }
 
     static class GuiHolder implements InventoryHolder {
-        final String key; final List<Material> shown = new ArrayList<>();
+        final String key; final List<Material> shown = new ArrayList<>(); int page = 0;
         GuiHolder(String key) { this.key = key; }
         @Override public Inventory getInventory() { return null; }
     }
@@ -62,6 +62,7 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
         getCommand("zyvenspawner").setExecutor(this);
         getServer().getScheduler().runTaskTimer(this, this::tick, 20L, 20L);
         getServer().getScheduler().runTaskTimer(this, this::saveData, 6000L, 6000L);
+        getServer().getScheduler().runTaskTimer(this, this::refreshGuis, 20L, 20L);
         getLogger().info("ZyvenSpawner enabled - inspired by DonutSMP (credit to DonutSMP).");
         if (econ == null) getLogger().warning("Vault economy not found: selling is disabled.");
     }
@@ -71,12 +72,13 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
     // ---------- helpers ----------
     private String key(Block b) { return b.getWorld().getName() + ";" + b.getX() + ";" + b.getY() + ";" + b.getZ(); }
 
-    private String pretty(EntityType t) {
-        String[] p = t.name().toLowerCase().split("_");
+    private String nice(String name) {
         StringBuilder sb = new StringBuilder();
-        for (String s : p) sb.append(Character.toUpperCase(s.charAt(0))).append(s.substring(1)).append(' ');
+        for (String p : name.toLowerCase().split("_")) sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1)).append(' ');
         return sb.toString().trim();
     }
+
+    private String pretty(EntityType t) { return nice(t.name()); }
 
     private ConfigurationSection cfg(EntityType t) { return getConfig().getConfigurationSection("spawners." + t.name()); }
 
@@ -230,6 +232,8 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
     }
 
     // ---------- GUI ----------
+    private static final int PER_PAGE = 45;
+
     private ItemStack icon(Material m, String name, String... lore) {
         ItemStack i = new ItemStack(m);
         ItemMeta im = i.getItemMeta();
@@ -239,38 +243,101 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
         return i;
     }
 
+    private String compact(double n) {
+        if (n >= 1_000_000_000) return String.format("%.2fB", n / 1_000_000_000);
+        if (n >= 1_000_000) return String.format("%.2fM", n / 1_000_000);
+        if (n >= 10_000) return String.format("%.1fK", n / 1_000);
+        return n == Math.floor(n) ? String.format("%,d", (long) n) : String.format("%,.2f", n);
+    }
+
     private double price(EntityType t, Material m) {
         ConfigurationSection c = cfg(t);
         return c == null ? 0 : c.getDouble("drops." + m.name() + ".price", 0);
+    }
+
+    private Material eggFor(EntityType t) {
+        Material m = Material.matchMaterial(t.name() + "_SPAWN_EGG");
+        return m == null ? Material.SPAWNER : m;
+    }
+
+    private void fill(Inventory inv, GuiHolder h, SpawnerData d) {
+        inv.clear();
+        h.shown.clear();
+        List<Map.Entry<Material, Long>> list = new ArrayList<>();
+        double worth = 0;
+        for (Map.Entry<Material, Long> en : d.items.entrySet()) {
+            if (en.getValue() <= 0) continue;
+            list.add(en);
+            worth += en.getValue() * price(d.type, en.getKey());
+        }
+        list.sort((x, y) -> Double.compare(y.getValue() * price(d.type, y.getKey()), x.getValue() * price(d.type, x.getKey())));
+        int pages = Math.max(1, (list.size() + PER_PAGE - 1) / PER_PAGE);
+        if (h.page >= pages) h.page = pages - 1;
+        if (h.page < 0) h.page = 0;
+
+        int start = h.page * PER_PAGE;
+        for (int i = 0; i < PER_PAGE && start + i < list.size(); i++) {
+            Material m = list.get(start + i).getKey();
+            long amt = list.get(start + i).getValue();
+            h.shown.add(m);
+            ItemStack it = icon(m, "§f" + nice(m.name()),
+                    "§a$ §f" + compact(amt * price(d.type, m)), "",
+                    "§7Stored: §e" + String.format("%,d", amt),
+                    "§eClick §7- take 1 stack", "§eShift-click §7- take all");
+            it.setAmount((int) Math.max(1, Math.min(m.getMaxStackSize(), amt)));
+            inv.setItem(i, it);
+        }
+
+        ConfigurationSection c = cfg(d.type);
+        inv.setItem(48, icon(Material.GOLD_INGOT, "§6Sell All", "§a$ §f" + compact(worth), "",
+                econ == null ? "§cVault not installed" : "§eClick to sell everything"));
+        ItemStack head = icon(eggFor(d.type), "§e" + pretty(d.type) + " Spawners",
+                "§7Stack: §e" + String.format("%,d", d.stack),
+                "§7Income: §eevery " + (c == null ? "?" : c.getLong("interval-seconds")) + "s",
+                "§7Stored items: §e" + String.format("%,d", d.total()),
+                "§7Stored XP: §e" + String.format("%,d", d.xp), "",
+                "§eClick §7to collect XP", "", CREDIT);
+        inv.setItem(49, head);
+        inv.setItem(50, icon(Material.DROPPER, "§bTake All", "§7Move all items to your inventory", "", "§eClick to take"));
+        if (h.page > 0) inv.setItem(45, icon(Material.ARROW, "§ePrevious Page", "§7Page " + h.page + "/" + pages));
+        if (h.page < pages - 1) inv.setItem(53, icon(Material.ARROW, "§eNext Page", "§7Page " + (h.page + 2) + "/" + pages));
     }
 
     private void open(Player p, String k) {
         SpawnerData d = spawners.get(k);
         if (d == null) return;
         GuiHolder h = new GuiHolder(k);
-        Inventory inv = Bukkit.createInventory(h, 54, "§8" + pretty(d.type) + " Spawner x" + d.stack);
-        double worth = 0; int slot = 0;
-        for (Map.Entry<Material, Long> en : d.items.entrySet()) {
-            worth += en.getValue() * price(d.type, en.getKey());
-            if (en.getValue() <= 0 || slot >= 45) continue;
-            h.shown.add(en.getKey());
-            ItemStack it = icon(en.getKey(), "§f" + en.getKey().name().toLowerCase().replace('_', ' '),
-                    "§7Stored: §e" + en.getValue(),
-                    "§7Value: §a$" + String.format("%,.2f", en.getValue() * price(d.type, en.getKey())), "",
-                    "§eClick: §7take 64", "§eShift-click: §7take as many as fit");
-            inv.setItem(slot++, it);
-        }
-        ItemStack filler = icon(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 45; i < 54; i++) inv.setItem(i, filler);
-        ConfigurationSection c = cfg(d.type);
-        inv.setItem(45, icon(Material.SPAWNER, "§e" + pretty(d.type) + " Spawner",
-                "§7Stack: §e" + d.stack, "§7Interval: §e" + (c == null ? "?" : c.getLong("interval-seconds")) + "s",
-                "§7Stored items: §e" + d.total()));
-        inv.setItem(48, icon(Material.EXPERIENCE_BOTTLE, "§aCollect XP", "§7Stored XP: §e" + d.xp, "", "§eClick to collect"));
-        inv.setItem(49, icon(Material.GOLD_INGOT, "§6Sell All", "§7Worth: §a$" + String.format("%,.2f", worth), "",
-                econ == null ? "§cVault not installed" : "§eClick to sell everything"));
-        inv.setItem(53, icon(Material.PAPER, CREDIT, "§7Unofficial fan recreation of", "§7the DonutSMP spawner system."));
+        Inventory inv = Bukkit.createInventory(h, 54, "§8" + pretty(d.type) + " Spawners");
+        fill(inv, h, d);
         p.openInventory(inv);
+        p.playSound(p.getLocation(), Sound.BLOCK_CHEST_OPEN, 0.5f, 1.2f);
+    }
+
+    private void refreshGuis() {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            Inventory top = p.getOpenInventory().getTopInventory();
+            if (top.getHolder() instanceof GuiHolder h) {
+                SpawnerData d = spawners.get(h.key);
+                if (d == null) p.closeInventory(); else fill(top, h, d);
+            }
+        }
+    }
+
+    private long give(Player p, SpawnerData d, Material m, long want) {
+        long have = d.items.getOrDefault(m, 0L);
+        want = Math.min(want, have);
+        long given = 0;
+        while (given < want) {
+            int n = (int) Math.min(m.getMaxStackSize(), want - given);
+            int notGiven = p.getInventory().addItem(new ItemStack(m, n)).values().stream().mapToInt(ItemStack::getAmount).sum();
+            given += n - notGiven;
+            if (notGiven > 0) break;
+        }
+        if (given > 0) {
+            long left = have - given;
+            if (left <= 0) d.items.remove(m); else d.items.put(m, left);
+        }
+        return given;
     }
 
     @EventHandler
@@ -281,31 +348,42 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
         SpawnerData d = spawners.get(h.key);
         if (d == null) { p.closeInventory(); return; }
         int s = e.getRawSlot();
+        Sound sound = Sound.UI_BUTTON_CLICK;
 
         if (s >= 0 && s < h.shown.size()) {
             Material m = h.shown.get(s);
-            long have = d.items.getOrDefault(m, 0L);
-            long want = Math.min(have, e.isShiftClick() ? 36L * m.getMaxStackSize() : 64);
-            long given = 0;
-            while (given < want) {
-                int n = (int) Math.min(m.getMaxStackSize(), want - given);
-                Map<Integer, ItemStack> left = p.getInventory().addItem(new ItemStack(m, n));
-                int notGiven = left.values().stream().mapToInt(ItemStack::getAmount).sum();
-                given += n - notGiven;
-                if (notGiven > 0) break;
-            }
-            d.items.merge(m, -given, Long::sum);
-            if (d.items.get(m) <= 0) d.items.remove(m);
+            give(p, d, m, e.isShiftClick() ? Long.MAX_VALUE : m.getMaxStackSize());
+            sound = Sound.ENTITY_ITEM_PICKUP;
+        } else if (s == 45) {
+            h.page--;
+        } else if (s == 53) {
+            h.page++;
         } else if (s == 48) {
-            if (d.xp > 0) { p.giveExp((int) Math.min(d.xp, Integer.MAX_VALUE)); d.xp = 0; }
-        } else if (s == 49) {
             if (econ == null) { p.sendMessage("§cSelling is disabled (Vault missing)."); return; }
             double total = 0;
             for (Map.Entry<Material, Long> en : d.items.entrySet()) total += en.getValue() * price(d.type, en.getKey());
             d.items.clear();
-            if (total > 0) { econ.depositPlayer(p, total); p.sendMessage("§aSold for §6$" + String.format("%,.2f", total)); }
+            if (total > 0) {
+                econ.depositPlayer(p, total);
+                p.sendMessage("§aSold for §6$" + String.format("%,.2f", total));
+                sound = Sound.ENTITY_EXPERIENCE_ORB_PICKUP;
+            }
+        } else if (s == 49) {
+            if (d.xp > 0) {
+                p.giveExp((int) Math.min(d.xp, Integer.MAX_VALUE));
+                d.xp = 0;
+                sound = Sound.ENTITY_EXPERIENCE_ORB_PICKUP;
+            }
+        } else if (s == 50) {
+            for (Material m : new ArrayList<>(d.items.keySet())) {
+                long want = d.items.get(m);
+                if (give(p, d, m, want) < want) break;   // inventory full
+            }
+            sound = Sound.ENTITY_ITEM_PICKUP;
         } else return;
-        open(p, h.key);
+
+        p.playSound(p.getLocation(), sound, 0.5f, 1f);
+        fill(e.getView().getTopInventory(), h, d);
     }
 
     // ---------- command ----------
@@ -360,29 +438,4 @@ public class ZyvenSpawnerPlugin extends JavaPlugin implements Listener, TabExecu
             SpawnerData d = e.getValue();
             y.set(k + ".loc", e.getKey());
             y.set(k + ".type", d.type.name());
-            y.set(k + ".stack", d.stack);
-            y.set(k + ".xp", d.xp);
-            for (Map.Entry<Material, Long> it : d.items.entrySet()) y.set(k + ".items." + it.getKey().name(), it.getValue());
-        }
-        try { y.save(dataFile); } catch (Exception ex) { getLogger().severe("Could not save data: " + ex.getMessage()); }
-    }
-
-    private void loadData() {
-        if (!dataFile.exists()) return;
-        YamlConfiguration y = YamlConfiguration.loadConfiguration(dataFile);
-        for (String k : y.getKeys(false)) {
-            try {
-                SpawnerData d = new SpawnerData();
-                d.type = EntityType.valueOf(y.getString(k + ".type"));
-                d.stack = y.getLong(k + ".stack", 1);
-                d.xp = y.getLong(k + ".xp", 0);
-                ConfigurationSection it = y.getConfigurationSection(k + ".items");
-                if (it != null) for (String m : it.getKeys(false)) {
-                    Material mat = Material.matchMaterial(m);
-                    if (mat != null) d.items.put(mat, it.getLong(m));
-                }
-                spawners.put(y.getString(k + ".loc"), d);
-            } catch (Exception ex) { getLogger().warning("Skipped bad entry " + k); }
-        }
-    }
-}
+      
